@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="/codebase/webix.css" type="text/css" media="screen" charset="utf-8">
+    <script src="/codebase/webix.js" type="text/javascript" charset="utf-8"></script>
+    <title>Layout and Resizer</title>
+</head>
+<style>
+    .inactive {
+        color: #c2d0d4;
+    }
+    .ftab {
+        font-family: 'Ubuntu';
+        font-size: 14px;
+        width: 80%;
+    }
+    .center {
+        text-align: center;
+    }
+</style>
+
+<body>
+<div id='layout_div' style='width:95%; height: 600px; margin:0 auto;'></div>
+<script type="text/javascript" charset="utf-8">
+
+   var toolbar = {
+       view:"toolbar",
+       id:"myToolbar",
+       height: 30,
+       cols:[
+          //  { gravity: 4},
+            { view:"toggle", type:"iconButton", offIcon:"envelope", onIcon:"envelope-o", width:100, label:"Mail" },
+            { view:"button", type:"iconButton", icon:"users", width:100,  label:"Users" },
+            { view:"toggle", type:"iconButton", icon:"edit", width:100,  label:"Cog", popup:"showColsSet" }
+       ]
+   };
+
+   webix.ui({
+       view:"popup",
+       id: "showColsSet",
+       width: 150, height:300,
+       top:200, left: 300,
+       body:{
+           view:"list",
+           data:[
+                { view:"checkbox", id:"field_a", label:"Second age", value:1},
+                { view:"checkbox", id:"field_b", label:"Second age", value:1}
+           ]
+       }
+   }).hide();
+
+   // Возвращается картинка
+   function formatBitVal(value){
+
+       if (value == 1)
+           return "<span class='webix_icon fa-check'></span>";
+       else
+           return "";
+   }
+
+   var dtable = {
+       view:"datatable",
+       scheme:{
+           $change:function(item){
+              if( item.active == 0 ) item.$css = "inactive";
+           },
+
+          $init:function(item){
+               // проходим по всем значениям строки
+               Object.keys(item).forEach( function(e,i){
+                   if( item[e] == null)
+                       item[e] = '';
+               });
+
+           }
+       },
+       columns:[
+           { id:"id", header:"#",adjust:true },
+           { id:"username",fillspace:true, adjust:true, header:["username",{content:"textFilter"}], sort:"string"},
+           { id:"mailbox", header:"mailbox",adjust:true},
+           { id:"password", header:"password",adjust:true, hidden: true},
+           { id:"path", header:"path", width:100, hidden: true},
+           { id:"imap_enable", header:"imap", width:100,format:formatBitVal,css:"center"},
+           { id:"allow_nets", header:"allow_nets", width:140},
+           { id:"acl_groups", header:"acl_group", width:100, hidden: true},
+
+           { id:"master_admin", header:{text:"mas_admin", adjast:true},format:formatBitVal ,css:"center"},
+           { id:"master_domain", header:"m_domain", width:100 ,format:formatBitVal,css:"center"},
+
+           { id:"active", header:"active", width:100,format:formatBitVal,css:"center", hidden: true },
+           { id:"last_login", header:"L_login", width:100, format: webix.Date.dateToStr("%Y-%m-%d")},
+           { id:"last_ip", header:"L_ip", width:100, hidden: true},
+           { id:"last_prot", header:"L_prot", width:80},
+       ],
+       on:{
+           onAfterLoad:function(){
+               webix.delay(function(){
+                   this.adjustRowHeight("allow_nets", true);
+                   this.render();
+               }, this);
+           },
+           onColumnResize:function(){
+               this.adjustRowHeight("allow_nets", true);
+               this.render();
+           }
+       },
+
+       select:"row",
+       fixedRowHeight:false, rowLineHeight:25, rowHeight:25,
+       //autowidth:true,
+       css: "ftab",
+       url:"../users.php",
+       minWidth:700,
+   };
+
+   webix.ui({
+           container: "layout_div",
+           rows:[
+                toolbar,
+                {cols:[
+                    dtable,
+                    {view:"resizer"},
+                    {
+                       rows:[
+                            {template:"column 2" },
+                            {view:"resizer"},
+                            {template:"column 3"},
+                            ]
+                   }
+                ]}
+           ]
+    })
+
+</script>
+</body>
+</html>
