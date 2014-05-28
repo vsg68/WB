@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <META http-equiv="content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="/codebase/webix.css" type="text/css" media="screen" charset="utf-8">
+    <script src="/codebase/webix.js" type="text/javascript" charset="utf-8"></script>
+    <title>Layout and Resizer</title>
+</head>
+<style>
+    html, body {
+        height: 100%;
+    }
+    .inactive {
+        color: #c2d0d4;
+    }
+    .localnet{ color: #000000 }
+    .net10{ color: #8bccac }
+    .net-0{ color: #cc5000 }
+    .net-4{ color: #0000ff}
+    .net-5{ color: #1bcc05 }
+    .net-12{ color: #0aaeff }
+    .net-109{ color: #cc0a48 }
+
+    .ftab, .webix_el_box input {
+        font-family: 'Ubuntu';
+        font-size: 14px;
+    }
+    .fleft{
+        float: left;
+        margin: 4px;
+    }
+    .fleft.mailbox {
+        width: 200px;
+        border-right:1px solid #ddd;
+    }
+
+    .fleft.fa-envelope { color: green; }
+    .fleft.fa-male { color: #660099; }
+    .fleft.fa-users { color:#3498db; }
+    .fleft.webix_icon,
+    .fleft.last_login {
+        border: 1px solid #999;
+        border-radius: 6px;
+        padding: 5px;
+        text-align: center;
+    }
+    .fleft.last_login {
+        line-height: 17px;
+        font-size: 11px;
+    }
+    /*.users_form .webix_inp_label{*/
+        /*width: 130px !important;*/
+    /*}*/
+
+</style>
+
+<body>
+<div id='layout_div' style='width:95%; height: 80%; margin:0 auto;'></div>
+<script type="text/javascript" charset="utf-8">
+
+
+
+//    var tabBar = {
+//        type:"top",
+//        id:"usersTab",
+//        view:"tabbar",
+//        multiview:true,
+//        height: 40,
+//        options: [
+//            { value: "<span class='webix_icon fa-user '></span><span style='padding-left: 8px'>Пользователи</span>", id: 'lusers' },
+//            { value: "<span class='webix_icon fa-edit '></span><span style='padding-left: 8px'>Редактирование</span>", id: 'dform' },
+//        ],
+//    };
+
+/**************  Users ******************/
+//  Поиск и лейбл
+    var toolBar = { view: "toolbar", height: 30, cols: [
+        { id:"filter_mbox",view: "text", placeholder: "Filter..", width: 200},
+        { view:"label", label: "Пользователи"}]
+    };
+
+    //  Вывод пользователей
+    var lusers = {
+        id: 'lusers',
+        view: "list",
+        template: function(obj){
+                tmpl = "<div class='fleft mailbox " + (obj.active == "0" ? "inactive" : "") + "'>"+ obj.mailbox +"</div>";
+                tmpl += "<div class='fleft username' title='username'>"+ obj.username +"</div>";
+                if( obj.imap_enable == "1" )   tmpl += "<div class='fleft fa-envelope webix_icon' title='imap_enable'></div>";
+                if( obj.master_admin == "1" )  tmpl += "<div class='fleft fa-male webix_icon' title='master_admin'></div>";
+                if( obj.master_domain == "1" ) tmpl += "<div class='fleft fa-users webix_icon' title='master_domain'></div>";
+                if( obj.lastlog )    tmpl += "<div class='fleft last_login' title='last_login'>" + obj.lastlog + "</div>";
+                if( obj.allow_nets ){
+                    net = obj.allow_nets.split(';');
+                    for(i=0; i < net.length; i++) {
+                        if( /127.0.0.1*/.test(net[i]) )
+                            colorclass = 'localnet';
+                        else if( /10.0.0.0*/.test(net[i]) )
+                            colorclass = 'net10';
+                        else
+                            colorclass = 'net-' + (net[i].split('.'))[2];
+
+                        tmpl += "<div class='fleft fa-sitemap webix_icon "+ colorclass +"' title='"+ net[i]+"'></div>";
+                    }
+                }
+                return tmpl;
+        },
+        type: { height: 40 },
+        select: true,
+        css: "ftab",
+        on:{
+            "onAfterSelect": function(){
+                item = $$('lusers').getSelectedItem();
+                $$('list_aliases').clearAll();
+                $$('list_aliases').load("../alias.php?q=alias&mbox="+ item.mailbox)
+                $$('lfwd').clearAll();
+                $$('lfwd').load("../alias.php?q=fwd&mbox="+ item.mailbox);
+            },
+            "onKeyPress": function(key){
+                keyPressAction(this, key);
+            }
+        },
+        url: "../users.php?q=mbox",
+    };
+
+//  Форма редактирования пользователя
+    var dform = {
+        id: "dform",
+        view: "form",
+        elementsConfig:{labelWidth:150},
+        elements:[
+                { id:"frmmailbox",view:"text", label:"mailbox", name:"mailbox",},
+                { id:"frmusername", view:"text", label:"username",name:"username",},
+                { id:"frmpassword",view:"text", label:"password", name:"password"},
+                { id:"frmpath",view:"text", label:"path", name:"path"},
+                { id:"frmimap",view:"checkbox", label:"imap_enable", name:"imap_enable"},
+                { id:"frmnets",view:"text", label:"allow_nets", name:"allow_nets"},
+                { id:"frmgroups",view:"text", label:"acl_groups", name:"acl_groups"},
+                { id:"frmadmin",view:"checkbox", label:"master_admin", name:"master_admin"},
+                { id:"frmdomain",view:"checkbox", label:"master_domain", name:"master_domain"},
+                { id:"frmlastlog",view:"text", label:"lastlog", name:"lastlog", disabled:true},
+                { id:"frmlastip",view:"text", label:"last_ip", name:"last_ip", disabled:true},
+                { id:"frmlastprog",view:"text", label:"last_prog", name:"last_prog", disabled:true},
+                { id:"frmactive",view:"checkbox", label:"active", name:"active"},
+                { margin:15, cols:[
+                    {},
+                    { view:"button", value:"Cancel", width:100,  click:"cancel1()" },
+                    { view:"button", value:"Save", width:100,  type:"form", click:"save1()" },
+                    {}
+
+                ]},
+                {}  // spacer
+        ],
+    };
+
+//  Форма для вывода пользователей и формы редактирования
+    var usersForm = {
+        id:"usersView",
+        view:"multiview",
+        autoheight: true,
+        cells:[ lusers, dform ],
+    };
+
+/**************  End users ******************/
+/*********   Aliases  ********/
+    var list_aliases = {
+        id:"list_aliases",
+        view: "list",
+        scroll: false,
+        select: true,
+        width: 250,
+        template: function(obj){
+            return "<div class='" + (obj.active == "0" ? "inactive" : "") + "'>"+ obj.alias_name +"</div>";
+        },
+        on: {
+            "onKeyPress": function(key){
+                keyPressAction(this, key);
+            }
+        }
+    };
+    //  Форма редактирования алиасов
+    var form_aliases = {
+        id: "form_aliases",
+        view: "form",
+        width: 250,
+        elements:[
+            { id:"falias_name",view:"text", label:"alias", name:"alias_name",},
+            { id:"falactive",view:"checkbox", label:"active", name:"active"},
+            { margin:5, cols:[
+                {},
+                { view:"button", value:"Cancel", width:70,  click:"cancel()" },
+                { view:"button", value:"Save", width:70,  type:"form", click:"save()" },
+                {}
+            ]},
+            {}  // spacer
+        ],
+    };
+
+    //  Форма для вывода пользователей и формы редактирования
+    var aliasForm = {
+        id:"aliasView",
+        view:"multiview",
+        autoheight: true,
+        cells:[ list_aliases, form_aliases ]
+    };
+
+
+/**********  End Alises **************/
+
+    var lfwd = {
+        id:"lfwd",
+        view: "list",
+        scroll: false,
+        width: 200,
+        template: function(obj){
+            return "<div class='" + (obj.active == "0" ? "inactive" : "") + "'>"+ obj.delivery_to +"</div>";
+        },
+    };
+
+    var lgroup = {
+        id:"lgroup",
+        view: "list",
+        scroll: false,
+        width: 200,
+        template: function(obj){
+            return "<div class='" + (obj.active == "0" ? "inactive" : "") + "'>"+ obj.delivery_to +"</div>";
+        },
+    };
+
+    // Реакция на клавиши списка пользователей
+
+//    function keyPressAction(list, form, multiview) {
+
+//        list.attachEvent("onKeyPress",function(key){
+
+    function keyPressAction(list, key) {
+
+            multiview = list.getParentView();
+            if( multiview.config.view == "multiview") {
+
+                children = multiview.getChildViews();
+
+                for(i=0; i< children.length; i++){
+                    if(children[i].config.view == "form")
+                        form = children[i];
+                }
+            }
+
+            currID    = list.getSelectedId();
+            Ind = -1;
+
+            if( key == 40 ) {   // down arrow
+                Ind = list.getIndexById( list.getNextId(currID) );
+            }
+            else if( key == 38 ) {  // up arrow
+                Ind = list.getIndexById( list.getPrevId(currID) );
+            }
+            else if( key == 113 && form ) { // edit
+                form.show();
+            }
+            else if( key == 27 && multiview) { //cancel edit
+                multiview.back();
+            }
+            if( Ind >= 0 ) {
+                list.select(list.getIdByIndex(Ind));
+            }
+    }
+    // Сохранение формы
+    function save(){
+        this.getFormView().save();
+        this.getFormView().getParentView().back();
+    }
+    // Отмена изменений
+    function cancel(){
+        this.getFormView().getParentView().back();
+    }
+
+//    webix.protoUI({ name:"lusers" }, webix.EditAbility, webix.ui.list);
+
+
+    webix.ready(function () {
+        // Вывод основного представления
+        webix.ui({
+            container: "layout_div",
+            cols:[
+                {rows:[ toolBar, usersForm ]},
+
+                {rows:[
+                        {view:"toolbar",
+                            cols:[
+                                {view:"label", label: "Алиасы"}
+                            ]
+                        },
+                        aliasForm
+                ]},
+                {rows:[
+                        {view:"toolbar",
+                            cols:[
+                                {view:"label", label: "Форвард"}
+                            ]
+                        },
+                        lfwd
+                ]},
+                {rows:[
+                        {view:"toolbar",
+                            cols:[
+                                {view:"label", label: "Группы"}
+                            ]
+                        },
+                        lgroup
+                ]}
+            ]
+
+        });
+
+
+        // Связка формы и представления
+        $$('dform').bind($$('lusers'));
+        $$('form_aliases').bind($$('list_aliases'));
+
+        // Фильтрация по текстовым полям
+        $$("filter_mbox").attachEvent("onTimedKeyPress",function(){
+            //get user input value
+            var value = this.getValue().toLowerCase();
+
+            $$('lusers').filter(function(obj){
+
+                    if(  obj.mailbox.toLowerCase().indexOf(value) >= 0 || obj.username.toLowerCase().indexOf(value)  >= 0 )
+                        return 1;
+            })
+        });
+
+//        $$('lusers').attachEvent("onKeyPress",keyPressAction(key));
+//        $$('lusers').attachEvent("onKeyPress",function(key){ keyPressAction(key)});
+
+//        keyPressAction( $$('lusers'), $$('dform'),  $$("usersView") );
+//        keyPressAction( $$('list_aliases'), $$('form_aliases'),  $$("aliasView") );
+        // Реакция на клавиши списка пользователей
+//        $$('lusers').attachEvent("onKeyPress",function(key){
+//            currID    = this.getSelectedId();
+//            Ind = -1;
+//
+//            if( key == 40 ) {   // down arrow
+//                Ind = this.getIndexById( this.getNextId(currID) );
+//            }
+//            else if( key == 38 ) {  // up arrow
+//                Ind = this.getIndexById( this.getPrevId(currID) );
+//            }
+//            else if( key == 113 ) { // edit
+//                $$('dform').show();
+//            }
+//            else if( key == 27 ) { //cancel edit
+//                $$("usersView").back();
+//            }
+//            if( Ind >= 0 ) {
+//                this.select(this.getIdByIndex(Ind));
+//            }
+//        });
+
+
+
+
+    });
+
+</script>
+</body>
+</html>
