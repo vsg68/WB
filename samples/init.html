@@ -6,16 +6,15 @@
     <title>Layout and Resizer</title>
 </head>
 <style>
-    .inactive {
-        color: #c2d0d4;
-    }
+    .inactive { color: #c2d0d4; }
+    .webix_column > div:nth-child(even){ background: #f7f7f7; }
+    .webix_column > div.webix_row_select{ background: #27ae60; }
+
     .ftab {
         font-family: 'Ubuntu';
         font-size: 14px;
     }
-    .center {
-        text-align: center;
-    }
+    .center { text-align: center; }
     .popup .webix_el_checkbox{
         /*background-color: yellow ;*/
         margin: 0 !important;
@@ -42,7 +41,6 @@
                     onChange: function(){
                         if( !this.getValue() ) {
                             $$("showColsSet").hide();
-//                            param = $$('confHide').getValues();
                             param = JSON.stringify($$('confHide').getValues());
 //                            При выходе - сохраняем состояние в локальной базе
                             webix.storage.local.put("confHideElem", param);
@@ -62,71 +60,68 @@
        borderless: true,
        elements:[]
    };
-
-    // Возвращается картинка
-   function formatBitVal(value){
-
-       if (value == 1)
-           return "<span class='webix_icon fa-check'></span>";
-       else
-           return "";
-   }
-
-   dtable = {
+   var dtable = {
        id:'dtable',
        view:"datatable",
+       editable:true,
+       editaction:"dblclick",
        scheme:{
-           $change:function(item){
-              if( item.active == 0 ) item.$css = "inactive";
-           },
+           $change:function(obj){
+                // Раскрашиваем строку в зависимости от значения поля
+//               obj.define("onContext{}");
+               if( ! obj['active'])
+                   obj.$css = "inactive";
 
-           $init:function(obj){
                // проходим по всем значениям строки
                for(var key in obj) {
                    if( obj[key] == null )
                        obj[key] = "";
                }
-
            }
        },
        columns:[
            { id:"id", header:"#",adjust:true },
-           { id:"username",header:"username", sort:"string",fillspace:true},
-//           { id:"username",fillspace:true, header:["username",{content:"textFilter"}], sort:"string"},
-           { id:"mailbox", header:"mailbox",adjust:true, sort:"string"},
-           { id:"password", header:"password",adjust:true, hidden: true},
+           { id:"username",header:"username", sort:"string", adjust:true, editor:"text", clipboard:true},
+           { id:"mailbox", header:"mailbox", adjust:true, editor:"text", sort:"string"},
+           { id:"password", header:"password", width:120, hidden: true, editor:"text"},
            { id:"path", header:"path", width:100, hidden: true},
            { id:"imap_enable", header:"imap", width:100,format:formatBitVal,css:"center"},
-           { id:"allow_nets", header:"allow_nets", width:140},
+           { id:"allow_nets", header:"allow_nets", adjust:true},
            { id:"acl_groups", header:"acl_group", width:100, hidden: true},
-
-           { id:"master_admin", header:{text:"mas_admin", adjast:true},format:formatBitVal ,css:"center"},
-           { id:"master_domain", header:"m_domain", width:100 ,format:formatBitVal,css:"center"},
-
+           { id:"master_admin", header:"mas_admin", width:100,format:formatBitVal,css:"center"},
+           { id:"master_domain", header:"m_domain", width:100,format:formatBitVal,css:"center"},
            { id:"active", header:"active", width:100,format:formatBitVal,css:"center", hidden: true },
            { id:"last_login", header:"L_login", width:100, format: webix.Date.dateToStr("%Y-%m-%d")},
-           { id:"last_ip", header:"L_ip", width:100, hidden: true},
+           { id:"last_ip", header:"L_ip", width:120, hidden: true},
            { id:"last_prot", header:"L_prot", width:80}
        ],
-       on:{
-           onAfterLoad:function(){
-               webix.delay(function(){
-                   this.adjustRowHeight("allow_nets", true);
-                   this.render();
-               }, this);
-           }
-       },
+       resizeColumn:true,
        select:"row",
-       fixedRowHeight:false, rowLineHeight:25, rowHeight:25,
        css:"ftab",
        url:"../users.php"
    };
 
+   // Возвращается картинка
+   function formatBitVal(value){
+       return (value == 1 ? "<span class='webix_icon fa-check'></span>" : "");
+   }
+
+   webix.ui({
+       view:"contextmenu",
+       id:"cmenu",
+       data:["Add","Rename","Delete",{ $template:"Separator" },"Info"],
+       on:{
+           onItemClick:function(id){
+               var context = this.getContext();
+               var list = context.obj;
+               var listId = context.id;
+               webix.message("List item: <i>"+list.getItem(listId).title+"</i> <br/>Context menu item: <i>"+this.getItem(id).value+"</i>");
+           }
+       }
+   });
 
 
-
-
-webix.ready(function(){
+   webix.ready(function(){
 
     webix.ui({
         container: "layout_div",
@@ -141,7 +136,7 @@ webix.ready(function(){
                         {view:"resizer"},
                         {template:"column 3"}
                     ],
-                    width:400
+                    width:400,
                 }
             ]}
         ]
@@ -149,16 +144,16 @@ webix.ready(function(){
     // Если у нас есть настройка видимости колонок - берем
     var confHideElem = JSON.parse(webix.storage.local.get("confHideElem"));
     for( var elem in  confHideElem ) {
-        if( confHideElem[elem] == 0 )
-            $$("dtable").hideColumn(elem);
+        confHideElem[elem] == 0 ?  $$("dtable").hideColumn(elem) : $$("dtable").showColumn(elem);
     }
 
     //  Заполнение попап окна скрытыми полями
     $$('dtable').im.forEach(function(e){
-                        confHide.elements.push({
+                confHide.elements.push({
                                 view:"checkbox",
                                 name: e,
                                 labelRight: e,
+                                disabled: (e == "id" || e == "username" || e == "mailbox") ?  true : false,
                                 value: $$('dtable').isColumnVisible(e),
                                 on:{
                                     'onChange': function(){
@@ -166,7 +161,7 @@ webix.ready(function(){
                                         this.getValue() ? $$("dtable").showColumn(key) : $$("dtable").hideColumn(key) ;
                                     }
                                 }
-                        });
+                });
     });
 
     webix.ui({
