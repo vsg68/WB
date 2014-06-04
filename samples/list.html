@@ -99,32 +99,46 @@ function ToolBar(label, abr){
       this.height = 30;
       this.cols = [
                     {view: "label", label: label},
-                    {view: "button", type:"iconButton", icon:"plus", label:"Add", click: function(){
+                    {view: "button", type:"iconButton", icon:"plus", label:"New", click: function(){
                         // Если не выбран пользователь - выходим
-                        if( $$("lusers").getSelectedId() == false ) return 1;
+                        if( abr != "user" && $$("list_user").getSelectedId() == false ) return 1;
 
-                        $$("form_"+ abr).clear();    // очищаем данные формы
-                        newID = $$("list_"+ abr).add( $$("form_"+ abr).getValues() );     // создаем новую запись
+                        // заполняю дефолтными значениями
+                        defaults = {"active":1};
+                        defaults[ $$("list_"+ abr).config.entryfield ] = $$("list_user").getSelectedItem().mailbox;
 
+                        newID = $$("list_"+ abr).add(defaults);     // создаем новую запись
                         // заносим новый ид в переменную.
                         $$("list_"+ abr).getParentView().config.newID = newID;
                         // Переход к редактированию
                         $$("form_"+ abr).show();  $$("list_"+ abr).select(newID);
                     }, width:70},
                     {view: "button", type:"iconButton", icon:"minus", label:"Del",click: function(){
-                        $$("list_"+ abr).remove( $$("list_"+ abr).getSelectedId() );
+                        id = $$("list_"+ abr).getSelectedId();
+                        webix.confirm({text:"Уверены, что надо удалять?", callback: function(result){
+//                        тут надо отослать данные на сервер
+                            if(result) {
+                                 webix.ajax().post("../" + abr+ "_post.php", {id:id, type:"del"}, function(text){
+                                     if(text)
+                                         $$("list_"+ abr).remove();
+                                     else
+                                        webix.messages({type:"error", text:"Что-то пошло не так"});
+                                 })
+                            }
+                        }})
                     }, width:70}
       ]
 }
 
 function mView(id){
-//      this.id = id;
       this.view = "multiview";
       this.abbreviate = id.split("_")[0];
       this.newID;
       this.fitBiggest = true;
       this.cells = [
-          { id: "list_" + this.abbreviate, view: "list", scroll: false, select: true,
+          { id: "list_" + this.abbreviate, view: "list",
+            entryfield:"", // поле привязки к пользовательскому ящику
+            scroll: false, select: true,
             template: "<div class='isactive_#active#'>#alias_name#</div>",
             on: { "onKeyPress": function (key) {
                          keyPressAction(this, key);
@@ -141,8 +155,12 @@ function mView(id){
                     { view: "button", value: "Save", width: 70, type: "form", click: "save()" },
                     {}
                 ]},
-                {}  // spacer
-          ]}
+                {}],
+            rules: {
+                    alias_name: webix.rules.isEmail,
+                    delivery_to: webix.rules.isEmail
+            }
+          }
       ]
 };
 
@@ -182,12 +200,23 @@ function keyPressAction(list, key) {
 // Сохранение формы
 function save() {
 //    валидация!! {}
-
-    this.getFormView().save();
-    var mView = this.getFormView().getParentView();
-    mView.config.newID = "";
-    mView.back();
+    mForm = this.getFormView();
+    abrv = (mForm.config.id.split("_"))[1];
+    if( mForm.validate() ) {
+        webix.ajax().post("../" + abrv+ "_post.php", mForm.getValues(), function(text){ //TODO  подумать, как будут приниматься данные
+            if( text )
+                webix.message("Request: \n" + text); // server side response
+        });
+        mForm.save();
+        var mView = mForm.getParentView();
+        mView.config.newID = "";
+        mView.back();
+    }
+    else {
+        webix.message({ type:"error", text:"Что-то в форме не так.." });
+    }
 }
+
 // Отмена изменений
 function cancel() {
     var mView = this.getFormView().getParentView();
@@ -197,13 +226,26 @@ function cancel() {
     }
     mView.back();
 }
+// Проверка на существования адреса и id, а так же правильность домена
+function checkEmail(){
+        var valid = false;
+        var mForm = $$('form_user').getValues();
+        if( webix.rules.isEmail(mForm.mailbox) ) {
+            webix.ajax().sync().get("../users.php", { q:"valid", mbox: mForm.mailbox, id: mForm.id }, function(text){
+                valid = (text == 'null') ? true : false;  // responce
+            });
+            if(! valid )
+                webix.message({type:"error", expire:3000, text:"Проверьте адрес и домен"});
+        }
+        return valid;
+}
 
 /**************  Users ******************/
-var usrToolBar = new ToolBar("Пользователи");
+var usrToolBar = new ToolBar("Пользователи","user");
     usrToolBar.cols.unshift({ id: 'filter_mbox', view: 'text', placeholder: 'Filter..', width: 200});
 //  Вывод пользователей
 var lusers = {
-    id: 'lusers',
+    id: 'list_user',
     view: "list",
     template: function (obj) {
         var tmpl = "<div class='fleft mailbox " + (obj.active == "0" ? "inactive" : "") + "'>" + obj.mailbox + "</div>";
@@ -232,7 +274,7 @@ var lusers = {
     css: "ftab",
     on: {
         "onAfterSelect": function () {
-            item = $$('lusers').getSelectedItem();
+            item = $$('list_user').getSelectedItem();
             $$('list_aliases').clearAll();
             $$('list_aliases').load("../alias.php?q=alias&mbox=" + item.mailbox);
             $$('list_fwd').clearAll();
@@ -247,12 +289,12 @@ var lusers = {
 
 //  Форма редактирования пользователя
 var dform = {
-    id: "dform",
+    id: "form_user",
     view: "form",
     elementsConfig: {labelWidth: 150},
     elements: [
-        {view: "text", label: "mailbox", name: "mailbox" },
-        {view: "text", label: "username", name: "username" },
+        {view: "text", label: "mailbox", name: "mailbox"},
+        {view: "text", label: "username", name: "username"},
         {view: "text", label: "password", name: "password"},
         {view: "text", label: "path", name: "path"},
         {view: "checkbox", label: "imap_enable", name: "imap_enable"},
@@ -272,21 +314,36 @@ var dform = {
 
         ]},
         {}  // spacer
-    ]
+    ],
+    rules:{
+        mailbox: function(){ return checkEmail();},
+        username:  webix.rules.isNotEmpty,
+        password:  webix.rules.isNotEmpty
+    }
 };
 
 //  Форма для вывода пользователей и формы редактирования
-var usersForm = { id: "usersView", view: "multiview", minWidth: 800, cells: [ lusers, dform ] };
+var usersForm = {
+//    id: "usersView",
+    view: "multiview",
+    minWidth: 800,
+    newID:"",
+    abbreviate:"user",
+    cells: [ lusers, dform ] };
 
 /*********   Aliases  ********/
 var aliasToolBar = new ToolBar("Алиас","aliases");
 var aliasForm = new mView("aliases_mv");
+    aliasForm.cells[0].entryfield = "delivery_to";
+// set defaults
+
 /*********   Forward  ********/
 var fwdToolBar = new ToolBar("Форвард","fwd");
 var fwdForm = new mView("fwd_mv");
     fwdForm.cells[1].elements[2].hidden = false;
     fwdForm.cells[1].elements[1].hidden = true;
     fwdForm.cells[0].template = "<div class='isactive_#active#'>#delivery_to#</div>";
+    fwdForm.cells[0].entryfield = "alias_name";
 
 /*********   Groups  ********/
 var groupToolBar = new ToolBar("Группы","group");
@@ -307,7 +364,7 @@ webix.ready(function () {
 
 
     // Связка формы и представления
-    $$('dform').bind($$('lusers'));
+    $$('form_user').bind($$('list_user'));
     $$('form_aliases').bind($$('list_aliases'));
     $$('form_fwd').bind($$('list_fwd'));
 
@@ -316,7 +373,7 @@ webix.ready(function () {
         //get user input value
         var value = this.getValue().toLowerCase();
 
-        $$('lusers').filter(function (obj) {
+        $$('list_user').filter(function (obj) {
 
             if (obj.mailbox.toLowerCase().indexOf(value) >= 0 || obj.username.toLowerCase().indexOf(value) >= 0)
                 return 1;
